@@ -77,6 +77,74 @@ class GameRoom {
     }
 }
 
+// Helper functions for puzzle mechanics
+function checkSynchronizedSwitches(room, io) {
+    const synchronizedSwitches = Array.from(room.switches.values())
+        .filter(switchData => switchData.type === 'synchronized' && switchData.active);
+    
+    if (synchronizedSwitches.length > 0) {
+        const timeWindow = 2000; // 2 seconds
+        const now = Date.now();
+        const allWithinWindow = synchronizedSwitches.every(switchData => 
+            now - switchData.activationTime <= timeWindow
+        );
+        
+        if (allWithinWindow) {
+            // All switches activated within time window - open doors
+            io.to(room.id).emit('puzzleSolved', {
+                type: 'synchronized',
+                message: 'Perfect synchronization! Doors opened!'
+            });
+        } else {
+            // Reset switches if timing window exceeded
+            setTimeout(() => {
+                synchronizedSwitches.forEach(switchData => {
+                    room.switches.set(switchData.id, { ...switchData, active: false });
+                });
+                
+                io.to(room.id).emit('puzzleReset', {
+                    type: 'synchronized',
+                    message: 'Timing window exceeded. Try again!'
+                });
+            }, timeWindow);
+        }
+    }
+}
+
+function checkPatternSequence(room, io) {
+    const patternSwitches = Array.from(room.switches.values())
+        .filter(switchData => switchData.type === 'pattern' && switchData.active);
+    
+    if (patternSwitches.length > 0) {
+        // Check if switches are activated in correct sequence
+        const activatedSequence = patternSwitches
+            .map(switchData => switchData.sequenceOrder)
+            .sort((a, b) => a - b);
+        
+        const expectedSequence = Array.from({length: patternSwitches.length}, (_, i) => i + 1);
+        
+        if (JSON.stringify(activatedSequence) === JSON.stringify(expectedSequence)) {
+            // Correct sequence - open doors
+            io.to(room.id).emit('puzzleSolved', {
+                type: 'pattern',
+                message: 'Correct sequence! Doors opened!'
+            });
+        } else {
+            // Wrong sequence - reset after delay
+            setTimeout(() => {
+                patternSwitches.forEach(switchData => {
+                    room.switches.set(switchData.id, { ...switchData, active: false });
+                });
+                
+                io.to(room.id).emit('puzzleReset', {
+                    type: 'pattern',
+                    message: 'Wrong sequence. Try again!'
+                });
+            }, 1000);
+        }
+    }
+}
+
 // Socket.io connection handling
 io.on('connection', (socket) => {
     console.log('Player connected:', socket.id);
@@ -158,13 +226,57 @@ io.on('connection', (socket) => {
         const roomId = socket.roomId;
         if (roomId && gameRooms.has(roomId)) {
             const room = gameRooms.get(roomId);
-            room.switches.set(switchData.id, { active: true, activatedBy: socket.id });
+            
+            // Handle different puzzle types
+            switch (switchData.type) {
+                case 'cooperative':
+                    // Store cooperative switch state
+                    room.switches.set(switchData.id, { 
+                        active: true, 
+                        activatedBy: socket.id,
+                        playersOnSwitch: switchData.playersOnSwitch,
+                        type: 'cooperative'
+                    });
+                    break;
+                    
+                case 'synchronized':
+                    // Store synchronized switch with timing
+                    room.switches.set(switchData.id, { 
+                        active: true, 
+                        activatedBy: socket.id,
+                        activationTime: switchData.activationTime,
+                        type: 'synchronized'
+                    });
+                    
+                    // Check if all synchronized switches are active within time window
+                    checkSynchronizedSwitches(room, io);
+                    break;
+                    
+                case 'pattern':
+                    // Store pattern switch with sequence
+                    room.switches.set(switchData.id, { 
+                        active: true, 
+                        activatedBy: socket.id,
+                        sequenceOrder: switchData.sequenceOrder,
+                        type: 'pattern'
+                    });
+                    
+                    // Check pattern sequence
+                    checkPatternSequence(room, io);
+                    break;
+                    
+                default:
+                    // Default behavior
+                    room.switches.set(switchData.id, { active: true, activatedBy: socket.id });
+            }
             
             // Broadcast switch activation to all players
             io.to(roomId).emit('switchUpdate', {
                 switchId: switchData.id,
                 active: true,
-                activatedBy: socket.id
+                activatedBy: socket.id,
+                type: switchData.type,
+                ...switchData
             });
         }
     });
@@ -180,6 +292,60 @@ io.on('connection', (socket) => {
                 switchId: switchData.id,
                 active: false
             });
+        }
+    });
+
+    socket.on('chatMessage', (data) => {
+        const roomId = socket.roomId;
+        if (roomId && gameRooms.has(roomId)) {
+            // Broadcast message to all players in the room
+            io.to(roomId).emit('chatMessage', {
+                message: data.message,
+                playerName: data.playerName,
+                playerId: socket.id
+            });
+        }
+    });
+
+    socket.on('emojiReaction', (data) => {
+        const roomId = socket.roomId;
+        if (roomId && gameRooms.has(roomId)) {
+            // Broadcast emoji reaction to all players in the room
+            io.to(roomId).emit('emojiReaction', {
+                emoji: data.emoji,
+                playerName: data.playerName,
+                playerId: socket.id
+            });
+        }
+    });
+
+    socket.on('levelCompleted', (data) => {
+        const roomId = socket.roomId;
+        if (roomId && gameRooms.has(roomId)) {
+            const room = gameRooms.get(roomId);
+            
+            // Update room level
+            room.level += 1;
+            room.gameState = 'completed';
+            
+            // Broadcast level completion
+            io.to(roomId).emit('levelCompleted', {
+                level: data.level,
+                nextLevel: room.level,
+                playerCount: data.playerCount,
+                completionTime: data.completionTime
+            });
+            
+            console.log(`Level ${data.level} completed in room ${roomId} by ${data.playerCount} players`);
+            
+            // Auto-advance to next level after 3 seconds
+            setTimeout(() => {
+                room.gameState = 'playing';
+                io.to(roomId).emit('nextLevel', {
+                    level: room.level,
+                    playerCount: room.players.size
+                });
+            }, 3000);
         }
     });
 

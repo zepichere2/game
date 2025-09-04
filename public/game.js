@@ -27,90 +27,214 @@ let currentLevel = {
     playerCount: 0
 };
 
-// Level templates for different player counts
+// Enhanced level templates with cooperative puzzle mechanics
 const levelTemplates = {
     1: {
-        // Level 1 for different player counts
+        name: "Cooperative Switches",
+        description: "All players must work together to activate switches",
         platforms: [
             { x: 0, y: 670, width: 1280, height: 50, color: '#8B4513' }, // Ground
-            { x: 300, y: 570, width: 200, height: 20, color: '#8B4513' },
-            { x: 700, y: 470, width: 200, height: 20, color: '#8B4513' }
+            { x: 200, y: 570, width: 150, height: 20, color: '#8B4513' },
+            { x: 400, y: 470, width: 150, height: 20, color: '#8B4513' },
+            { x: 600, y: 370, width: 150, height: 20, color: '#8B4513' },
+            { x: 800, y: 270, width: 150, height: 20, color: '#8B4513' },
+            { x: 1000, y: 170, width: 150, height: 20, color: '#8B4513' }
         ],
         switches: [],
         doors: [],
-        goal: { x: 1150, y: 590, width: 80, height: 80 }
+        goal: { x: 1150, y: 90, width: 80, height: 80 },
+        puzzleType: 'cooperative_switches'
+    },
+    2: {
+        name: "Synchronized Timing",
+        description: "Players must activate switches in perfect synchronization",
+        platforms: [
+            { x: 0, y: 670, width: 1280, height: 50, color: '#8B4513' },
+            { x: 150, y: 570, width: 100, height: 20, color: '#8B4513' },
+            { x: 300, y: 470, width: 100, height: 20, color: '#8B4513' },
+            { x: 450, y: 370, width: 100, height: 20, color: '#8B4513' },
+            { x: 600, y: 270, width: 100, height: 20, color: '#8B4513' },
+            { x: 750, y: 170, width: 100, height: 20, color: '#8B4513' },
+            { x: 900, y: 70, width: 100, height: 20, color: '#8B4513' }
+        ],
+        switches: [],
+        doors: [],
+        goal: { x: 1050, y: 20, width: 80, height: 80 },
+        puzzleType: 'synchronized_timing'
+    },
+    3: {
+        name: "Pattern Recognition",
+        description: "Players must follow a specific sequence to unlock doors",
+        platforms: [
+            { x: 0, y: 670, width: 1280, height: 50, color: '#8B4513' },
+            { x: 200, y: 570, width: 120, height: 20, color: '#8B4513' },
+            { x: 400, y: 470, width: 120, height: 20, color: '#8B4513' },
+            { x: 600, y: 370, width: 120, height: 20, color: '#8B4513' },
+            { x: 800, y: 270, width: 120, height: 20, color: '#8B4513' },
+            { x: 1000, y: 170, width: 120, height: 20, color: '#8B4513' }
+        ],
+        switches: [],
+        doors: [],
+        goal: { x: 1150, y: 90, width: 80, height: 80 },
+        puzzleType: 'pattern_recognition'
     }
 };
 
 function generateLevel(levelNumber, playerCount) {
+    // Get base template or create a new one
+    const template = levelTemplates[levelNumber] || levelTemplates[1];
     const level = {
-        platforms: [
-            { x: 0, y: 670, width: 1280, height: 50, color: '#8B4513' } // Always have ground
-        ],
+        platforms: [...template.platforms],
         switches: [],
         doors: [],
-        goal: { x: 1150, y: 90, width: 80, height: 80 }
+        goal: { ...template.goal },
+        name: template.name,
+        description: template.description,
+        puzzleType: template.puzzleType,
+        playerCount: playerCount
     };
 
-    // Generate platforms based on player count and level
-    const platformCount = Math.min(3 + Math.floor(playerCount / 2), 8);
-    for (let i = 0; i < platformCount; i++) {
-        const x = 150 + (i * 150) + Math.random() * 100;
-        const y = 570 - (i * 80) - Math.random() * 50;
-        const width = 120 + Math.random() * 80;
-        
-        level.platforms.push({
-            x: Math.min(x, 1100),
-            y: Math.max(y, 150),
-            width: Math.min(width, 1280 - x),
-            height: 20,
-            color: '#8B4513'
-        });
+    // Generate puzzle elements based on type and player count
+    switch (template.puzzleType) {
+        case 'cooperative_switches':
+            generateCooperativeSwitches(level, playerCount);
+            break;
+        case 'synchronized_timing':
+            generateSynchronizedTiming(level, playerCount);
+            break;
+        case 'pattern_recognition':
+            generatePatternRecognition(level, playerCount);
+            break;
+        default:
+            generateCooperativeSwitches(level, playerCount);
     }
 
-    // Generate switches based on player count
-    const switchCount = Math.min(Math.floor(playerCount / 2) + 1, 6);
+    return level;
+}
+
+function generateCooperativeSwitches(level, playerCount) {
+    // Create switches that require ALL players to activate
+    const switchCount = Math.min(playerCount, 4);
+    
     for (let i = 0; i < switchCount; i++) {
-        const requiredPlayers = Math.min(i + 1, Math.floor(playerCount / 2) + 1);
         const platform = level.platforms[i + 1] || level.platforms[0];
         
         level.switches.push({
             id: `switch${i + 1}`,
-            x: platform.x + 20,
-            y: platform.y - 30,
+            x: platform.x + platform.width / 2 - 20,
+            y: platform.y - 35,
             width: 40,
-            height: 30,
+            height: 35,
             active: false,
-            requiredPlayers: requiredPlayers
+            requiredPlayers: playerCount, // ALL players must be on switch
+            type: 'cooperative',
+            color: '#FF6B6B'
         });
     }
 
-    // Generate doors linked to switches
-    for (let i = 0; i < level.switches.length; i++) {
+    // Create doors that require all switches to be active
+    for (let i = 0; i < switchCount; i++) {
         const platform = level.platforms[i + 2] || level.platforms[level.platforms.length - 1];
-        const doorHeight = 80 + (i * 20);
         
         level.doors.push({
             id: `door${i + 1}`,
-            x: platform.x + platform.width + 10,
-            y: platform.y - doorHeight,
-            width: 25,
-            height: doorHeight,
+            x: platform.x + platform.width + 5,
+            y: platform.y - 100,
+            width: 30,
+            height: 100,
             open: false,
-            linkedSwitch: `switch${i + 1}`
+            requiredSwitches: level.switches.map(s => s.id), // All switches must be active
+            type: 'cooperative'
+        });
+    }
+}
+
+function generateSynchronizedTiming(level, playerCount) {
+    // Create switches that must be activated within a time window
+    const switchCount = playerCount;
+    const timeWindow = 2000; // 2 seconds
+    
+    for (let i = 0; i < switchCount; i++) {
+        const platform = level.platforms[i + 1] || level.platforms[0];
+        
+        level.switches.push({
+            id: `switch${i + 1}`,
+            x: platform.x + platform.width / 2 - 20,
+            y: platform.y - 35,
+            width: 40,
+            height: 35,
+            active: false,
+            requiredPlayers: 1,
+            type: 'synchronized',
+            color: '#4ECDC4',
+            timeWindow: timeWindow,
+            activationTime: null
         });
     }
 
-    // Adjust goal position based on level complexity
+    // Create a master door that opens only when all switches are activated within time window
     const finalPlatform = level.platforms[level.platforms.length - 1];
-    level.goal = {
-        x: Math.max(finalPlatform.x + finalPlatform.width + 50, 1100),
-        y: finalPlatform.y - 80,
-        width: 80,
-        height: 80
-    };
+    level.doors.push({
+        id: 'master_door',
+        x: finalPlatform.x + finalPlatform.width + 5,
+        y: finalPlatform.y - 120,
+        width: 40,
+        height: 120,
+        open: false,
+        requiredSwitches: level.switches.map(s => s.id),
+        type: 'synchronized',
+        timeWindow: timeWindow
+    });
+}
 
-    return level;
+function generatePatternRecognition(level, playerCount) {
+    // Create switches that must be activated in a specific sequence
+    const switchCount = Math.min(playerCount, 5);
+    const sequence = generateRandomSequence(switchCount);
+    
+    for (let i = 0; i < switchCount; i++) {
+        const platform = level.platforms[i + 1] || level.platforms[0];
+        
+        level.switches.push({
+            id: `switch${i + 1}`,
+            x: platform.x + platform.width / 2 - 20,
+            y: platform.y - 35,
+            width: 40,
+            height: 35,
+            active: false,
+            requiredPlayers: 1,
+            type: 'pattern',
+            color: '#96CEB4',
+            sequenceOrder: sequence[i],
+            activated: false
+        });
+    }
+
+    // Create doors that open based on sequence completion
+    for (let i = 0; i < switchCount; i++) {
+        const platform = level.platforms[i + 2] || level.platforms[level.platforms.length - 1];
+        
+        level.doors.push({
+            id: `door${i + 1}`,
+            x: platform.x + platform.width + 5,
+            y: platform.y - 100,
+            width: 30,
+            height: 100,
+            open: false,
+            requiredSequence: sequence.slice(0, i + 1),
+            type: 'pattern'
+        });
+    }
+}
+
+function generateRandomSequence(length) {
+    const sequence = Array.from({length}, (_, i) => i + 1);
+    // Shuffle the sequence
+    for (let i = sequence.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [sequence[i], sequence[j]] = [sequence[j], sequence[i]];
+    }
+    return sequence;
 }
 
 function updateLevel(levelNumber, playerCount) {
@@ -374,8 +498,76 @@ socket.on('switchUpdate', (data) => {
 });
 
 socket.on('roomFull', () => {
-    alert('Room is full! Maximum 10 players allowed.');
+    alert('Room is full! Maximum 16 players allowed.');
 });
+
+socket.on('puzzleSolved', (data) => {
+    console.log('Puzzle solved:', data.message);
+    // Show success message
+    showPuzzleMessage(data.message, 'success');
+    
+    // Open all doors
+    doors.forEach(door => {
+        door.open = true;
+    });
+});
+
+socket.on('puzzleReset', (data) => {
+    console.log('Puzzle reset:', data.message);
+    // Show reset message
+    showPuzzleMessage(data.message, 'error');
+    
+    // Reset switches
+    switches.forEach(switchObj => {
+        if (switchObj.type === data.type) {
+            switchObj.active = false;
+            if (switchObj.type === 'pattern') {
+                switchObj.activated = false;
+            }
+        }
+    });
+    
+    // Close doors
+    doors.forEach(door => {
+        if (door.type === data.type) {
+            door.open = false;
+        }
+    });
+});
+
+function showPuzzleMessage(message, type) {
+    // Create or update puzzle message display
+    let messageEl = document.getElementById('puzzleMessage');
+    if (!messageEl) {
+        messageEl = document.createElement('div');
+        messageEl.id = 'puzzleMessage';
+        messageEl.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: ${type === 'success' ? 'rgba(0, 184, 148, 0.9)' : 'rgba(231, 76, 60, 0.9)'};
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            font-size: 18px;
+            font-weight: 600;
+            z-index: 1000;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        `;
+        document.body.appendChild(messageEl);
+    }
+    
+    messageEl.textContent = message;
+    messageEl.style.display = 'block';
+    
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+        messageEl.style.display = 'none';
+    }, 3000);
+}
 
 // Input event listeners
 document.addEventListener('keydown', (e) => {
@@ -511,10 +703,52 @@ function checkSwitches() {
         
         const shouldBeActive = playersOnSwitch.length >= switchObj.requiredPlayers;
         
-        if (shouldBeActive && !switchObj.active) {
-            socket.emit('switchActivated', { id: switchObj.id });
-        } else if (!shouldBeActive && switchObj.active) {
-            socket.emit('switchDeactivated', { id: switchObj.id });
+        // Handle different puzzle types
+        switch (switchObj.type) {
+            case 'cooperative':
+                // All players must be on the switch
+                if (shouldBeActive && !switchObj.active) {
+                    socket.emit('switchActivated', { 
+                        id: switchObj.id, 
+                        type: 'cooperative',
+                        playersOnSwitch: playersOnSwitch.length
+                    });
+                } else if (!shouldBeActive && switchObj.active) {
+                    socket.emit('switchDeactivated', { id: switchObj.id });
+                }
+                break;
+                
+            case 'synchronized':
+                // Single player activation with timing
+                if (shouldBeActive && !switchObj.active) {
+                    socket.emit('switchActivated', { 
+                        id: switchObj.id, 
+                        type: 'synchronized',
+                        activationTime: Date.now()
+                    });
+                } else if (!shouldBeActive && switchObj.active) {
+                    socket.emit('switchDeactivated', { id: switchObj.id });
+                }
+                break;
+                
+            case 'pattern':
+                // Sequence-based activation
+                if (shouldBeActive && !switchObj.activated) {
+                    socket.emit('switchActivated', { 
+                        id: switchObj.id, 
+                        type: 'pattern',
+                        sequenceOrder: switchObj.sequenceOrder
+                    });
+                }
+                break;
+                
+            default:
+                // Default behavior
+                if (shouldBeActive && !switchObj.active) {
+                    socket.emit('switchActivated', { id: switchObj.id });
+                } else if (!shouldBeActive && switchObj.active) {
+                    socket.emit('switchDeactivated', { id: switchObj.id });
+                }
         }
     });
 }
@@ -533,128 +767,361 @@ function checkGoal() {
     if (playersAtGoal.length === gameState.players.length && gameState.players.length >= 2) {
         // Level completed!
         console.log('Level completed!');
+        socket.emit('levelCompleted', {
+            level: gameState.level,
+            playerCount: gameState.players.length,
+            completionTime: Date.now()
+        });
     }
 }
 
 function render() {
-    // Clear canvas
-    ctx.fillStyle = '#87CEEB';
+    // Clear canvas with pixelated background
+    ctx.imageSmoothingEnabled = false;
+    
+    // Create a pixelated sky gradient
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#87CEEB');
+    gradient.addColorStop(1, '#E0F6FF');
+    ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw platforms
+    // Add pixelated clouds
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    for (let i = 0; i < 5; i++) {
+        const cloudX = (i * 250 + 100) % canvas.width;
+        const cloudY = 50 + (i * 30);
+        drawPixelatedCloud(cloudX, cloudY);
+    }
+
+function drawPixelatedCloud(x, y) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+    // Draw cloud as pixelated blocks
+    const cloudPixels = [
+        [0,1,1,1,0],
+        [1,1,1,1,1],
+        [1,1,1,1,1],
+        [0,1,1,1,0]
+    ];
+    
+    const pixelSize = 6;
+    for (let row = 0; row < cloudPixels.length; row++) {
+        for (let col = 0; col < cloudPixels[row].length; col++) {
+            if (cloudPixels[row][col]) {
+                ctx.fillRect(x + col * pixelSize, y + row * pixelSize, pixelSize, pixelSize);
+            }
+        }
+    }
+}
+    
+    // Draw platforms with pixelated style
     platforms.forEach(platform => {
+        ctx.imageSmoothingEnabled = false;
+        
+        // Main platform
         ctx.fillStyle = platform.color;
         ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
         
-        // Add some texture
+        // Pixelated top texture
         ctx.fillStyle = '#654321';
-        ctx.fillRect(platform.x, platform.y, platform.width, 5);
-    });
-    
-    // Draw doors
-    doors.forEach(door => {
-        if (!door.open) {
-            ctx.fillStyle = '#8B0000';
-            ctx.fillRect(door.x, door.y, door.width, door.height);
-            
-            // Door handle
-            ctx.fillStyle = '#FFD700';
-            ctx.fillRect(door.x + door.width - 8, door.y + door.height/2 - 3, 6, 6);
-        }
-    });
-    
-    // Draw switches
-    switches.forEach(switchObj => {
-        ctx.fillStyle = switchObj.active ? '#00FF00' : '#FF0000';
-        ctx.fillRect(switchObj.x, switchObj.y, switchObj.width, switchObj.height);
+        ctx.fillRect(platform.x, platform.y, platform.width, 4);
         
-        // Switch indicator
-        ctx.fillStyle = '#000';
-        ctx.font = '12px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(switchObj.requiredPlayers.toString(), 
-                    switchObj.x + switchObj.width/2, 
-                    switchObj.y - 5);
-    });
-    
-    // Draw goal
-    ctx.fillStyle = '#FFD700';
-    ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
-    ctx.fillStyle = '#000';
-    ctx.font = '20px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText('🏁', goal.x + goal.width/2, goal.y + goal.height/2 + 7);
-    
-    // Draw players with improved design
-    gameState.players.forEach(player => {
-        const centerX = player.x + player.width/2;
-        const centerY = player.y + player.height/2;
-        
-        // Shadow
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-        ctx.fillRect(player.x + 2, player.y + 2, player.width, player.height);
-        
-        // Main body (rounded rectangle)
-        ctx.fillStyle = player.color;
-        ctx.beginPath();
-        ctx.roundRect(player.x, player.y, player.width, player.height, 8);
-        ctx.fill();
-        
-        // Body highlight
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.beginPath();
-        ctx.roundRect(player.x + 2, player.y + 2, player.width - 4, player.height/2, 6);
-        ctx.fill();
-        
-        // Eyes
-        ctx.fillStyle = '#FFF';
-        ctx.beginPath();
-        ctx.arc(centerX - 6, centerY - 4, 4, 0, Math.PI * 2);
-        ctx.arc(centerX + 6, centerY - 4, 4, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Eye pupils
-        ctx.fillStyle = '#000';
-        ctx.beginPath();
-        ctx.arc(centerX - 6, centerY - 4, 2, 0, Math.PI * 2);
-        ctx.arc(centerX + 6, centerY - 4, 2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Mouth
+        // Platform outline
         ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(centerX, centerY + 2, 4, 0, Math.PI);
-        ctx.stroke();
+        ctx.lineWidth = 1;
+        ctx.strokeRect(platform.x, platform.y, platform.width, platform.height);
         
-        // Player number badge
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        ctx.beginPath();
-        ctx.arc(player.x + player.width - 8, player.y + 8, 8, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#FFF';
-        ctx.font = 'bold 10px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText(player.number.toString(), 
-                    player.x + player.width - 8, 
-                    player.y + 12);
-        
-        // Movement particles when moving
-        if (Math.abs(player.velocityX) > 1) {
-            for (let i = 0; i < 3; i++) {
-                ctx.fillStyle = `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.6)`;
-                ctx.beginPath();
-                ctx.arc(
-                    player.x + Math.random() * player.width,
-                    player.y + player.height + Math.random() * 5,
-                    Math.random() * 2 + 1,
-                    0, Math.PI * 2
-                );
-                ctx.fill();
+        // Add pixelated grass texture on top
+        ctx.fillStyle = '#228B22';
+        for (let x = platform.x; x < platform.x + platform.width; x += 8) {
+            if (Math.random() > 0.3) {
+                ctx.fillRect(x, platform.y - 2, 2, 2);
             }
         }
     });
+    
+    // Draw doors with pixelated style
+    doors.forEach(door => {
+        if (!door.open) {
+            ctx.imageSmoothingEnabled = false;
+            
+            // Main door
+            ctx.fillStyle = '#8B0000';
+            ctx.fillRect(door.x, door.y, door.width, door.height);
+            
+            // Door outline
+            ctx.strokeStyle = '#000';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(door.x, door.y, door.width, door.height);
+            
+            // Door panels (pixelated design)
+            ctx.fillStyle = '#A52A2A';
+            ctx.fillRect(door.x + 2, door.y + 4, door.width - 4, 8);
+            ctx.fillRect(door.x + 2, door.y + door.height - 12, door.width - 4, 8);
+            
+            // Door handle (pixelated)
+            ctx.fillStyle = '#FFD700';
+            ctx.fillRect(door.x + door.width - 6, door.y + door.height/2 - 2, 4, 4);
+            
+            // Handle outline
+            ctx.strokeStyle = '#000';
+            ctx.strokeRect(door.x + door.width - 6, door.y + door.height/2 - 2, 4, 4);
+        }
+    });
+    
+    // Draw switches with enhanced visual style based on puzzle type
+    switches.forEach(switchObj => {
+        ctx.imageSmoothingEnabled = false;
+        
+        // Determine colors based on switch type and state
+        let baseColor, buttonColor, borderColor;
+        
+        switch (switchObj.type) {
+            case 'cooperative':
+                baseColor = switchObj.active ? '#00FF00' : '#FF6B6B';
+                buttonColor = switchObj.active ? '#32CD32' : '#FF8E8E';
+                borderColor = '#FF0000';
+                break;
+            case 'synchronized':
+                baseColor = switchObj.active ? '#00FF00' : '#4ECDC4';
+                buttonColor = switchObj.active ? '#32CD32' : '#7EDDDD';
+                borderColor = '#00CED1';
+                break;
+            case 'pattern':
+                baseColor = switchObj.active ? '#00FF00' : '#96CEB4';
+                buttonColor = switchObj.active ? '#32CD32' : '#B8E6B8';
+                borderColor = '#90EE90';
+                break;
+            default:
+                baseColor = switchObj.active ? '#00FF00' : '#FF0000';
+                buttonColor = switchObj.active ? '#32CD32' : '#DC143C';
+                borderColor = '#000';
+        }
+        
+        // Switch base with gradient effect
+        ctx.fillStyle = baseColor;
+        ctx.fillRect(switchObj.x, switchObj.y, switchObj.width, switchObj.height);
+        
+        // Switch outline
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(switchObj.x, switchObj.y, switchObj.width, switchObj.height);
+        
+        // Switch button with 3D effect
+        ctx.fillStyle = buttonColor;
+        ctx.fillRect(switchObj.x + 3, switchObj.y + 3, switchObj.width - 6, switchObj.height - 6);
+        
+        // Button highlight
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillRect(switchObj.x + 3, switchObj.y + 3, switchObj.width - 6, 6);
+        
+        // Button shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        ctx.fillRect(switchObj.x + 3, switchObj.y + switchObj.height - 6, switchObj.width - 6, 3);
+        
+        // Type indicator icon
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 10px monospace';
+        ctx.textAlign = 'center';
+        
+        let icon = '';
+        switch (switchObj.type) {
+            case 'cooperative':
+                icon = '👥';
+                break;
+            case 'synchronized':
+                icon = '⏱️';
+                break;
+            case 'pattern':
+                icon = '🔢';
+                break;
+        }
+        
+        // Draw icon
+        const iconX = switchObj.x + switchObj.width/2;
+        const iconY = switchObj.y + switchObj.height/2 + 3;
+        ctx.fillText(icon, iconX, iconY);
+        
+        // Required players indicator
+        if (switchObj.type === 'cooperative') {
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 8px monospace';
+            ctx.textAlign = 'center';
+            
+            const numX = switchObj.x + switchObj.width/2;
+            const numY = switchObj.y - 8;
+            
+            // Black outline
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    if (dx !== 0 || dy !== 0) {
+                        ctx.fillText(switchObj.requiredPlayers.toString(), numX + dx, numY + dy);
+                    }
+                }
+            }
+            
+            // White number
+            ctx.fillStyle = '#FFF';
+            ctx.fillText(switchObj.requiredPlayers.toString(), numX, numY);
+        }
+        
+        // Sequence number for pattern switches
+        if (switchObj.type === 'pattern' && switchObj.sequenceOrder) {
+            ctx.fillStyle = '#000';
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            
+            const seqX = switchObj.x + switchObj.width/2;
+            const seqY = switchObj.y - 8;
+            
+            // Black outline
+            for (let dx = -1; dx <= 1; dx++) {
+                for (let dy = -1; dy <= 1; dy++) {
+                    if (dx !== 0 || dy !== 0) {
+                        ctx.fillText(switchObj.sequenceOrder.toString(), seqX + dx, seqY + dy);
+                    }
+                }
+            }
+            
+            // White number
+            ctx.fillStyle = '#FFF';
+            ctx.fillText(switchObj.sequenceOrder.toString(), seqX, seqY);
+        }
+    });
+    
+    // Draw goal with pixelated style
+    ctx.imageSmoothingEnabled = false;
+    
+    // Goal base
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
+    
+    // Goal outline
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(goal.x, goal.y, goal.width, goal.height);
+    
+    // Goal flag pattern (pixelated)
+    ctx.fillStyle = '#FF0000';
+    for (let y = 0; y < goal.height; y += 8) {
+        for (let x = 0; x < goal.width; x += 8) {
+            if ((x + y) % 16 === 0) {
+                ctx.fillRect(goal.x + x, goal.y + y, 8, 8);
+            }
+        }
+    }
+    
+    // Goal text (pixelated font)
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('GOAL', goal.x + goal.width/2, goal.y + goal.height/2 + 4);
+    
+    // Draw players with pixelated square design
+    gameState.players.forEach(player => {
+        const pixelSize = 2; // Pixel scale for retro look
+        
+        // Disable anti-aliasing for pixel art
+        ctx.imageSmoothingEnabled = false;
+        
+        // Main body (square/rectangular)
+        ctx.fillStyle = player.color;
+        ctx.fillRect(player.x, player.y, player.width, player.height);
+        
+        // Body outline (pixelated border)
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(player.x, player.y, player.width, player.height);
+        
+        // Eyes (square pixels)
+        ctx.fillStyle = '#000';
+        const eyeSize = 4;
+        const eyeY = player.y + 6;
+        ctx.fillRect(player.x + 6, eyeY, eyeSize, eyeSize); // Left eye
+        ctx.fillRect(player.x + player.width - 10, eyeY, eyeSize, eyeSize); // Right eye
+        
+        // Eye highlights (smaller white pixels)
+        ctx.fillStyle = '#FFF';
+        ctx.fillRect(player.x + 7, eyeY + 1, 2, 2); // Left eye highlight
+        ctx.fillRect(player.x + player.width - 9, eyeY + 1, 2, 2); // Right eye highlight
+        
+        // Mouth (horizontal line of pixels)
+        ctx.fillStyle = '#000';
+        ctx.fillRect(player.x + 8, player.y + 18, 14, 2);
+        
+        // Body shading (darker pixels on right side)
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.fillRect(player.x + player.width - 4, player.y, 4, player.height);
+        
+        // Body highlight (lighter pixels on left side)
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.fillRect(player.x, player.y, 4, player.height);
+        
+        // Player number (pixelated font style)
+        ctx.fillStyle = '#000';
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        
+        // Draw number with pixel border effect
+        const numberX = player.x + player.width/2;
+        const numberY = player.y - 4;
+        
+        // Black outline
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                if (dx !== 0 || dy !== 0) {
+                    ctx.fillText(player.number.toString(), numberX + dx, numberY + dy);
+                }
+            }
+        }
+        
+        // White number
+        ctx.fillStyle = '#FFF';
+        ctx.fillText(player.number.toString(), numberX, numberY);
+        
+        // Movement particles (square pixels)
+        if (Math.abs(player.velocityX) > 1) {
+            for (let i = 0; i < 2; i++) {
+                ctx.fillStyle = player.color;
+                const particleSize = 2;
+                ctx.fillRect(
+                    player.x + Math.random() * player.width,
+                    player.y + player.height + Math.random() * 3,
+                    particleSize,
+                    particleSize
+                );
+            }
+        }
+        
+        // Re-enable anti-aliasing for other elements
+        ctx.imageSmoothingEnabled = true;
+    });
+    
+    // Draw level information overlay
+    if (gameState.gameStatus === 'playing' && currentLevel.name) {
+        // Semi-transparent background
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(10, 10, 400, 100);
+        
+        // Level name
+        ctx.fillStyle = '#FFF';
+        ctx.font = 'bold 20px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillText(currentLevel.name, 20, 35);
+        
+        // Level description
+        ctx.font = '14px Arial';
+        ctx.fillText(currentLevel.description, 20, 55);
+        
+        // Puzzle type indicator
+        ctx.font = '12px Arial';
+        ctx.fillStyle = '#4ECDC4';
+        ctx.fillText(`Puzzle Type: ${currentLevel.puzzleType.replace('_', ' ').toUpperCase()}`, 20, 75);
+        
+        // Player count
+        ctx.fillStyle = '#96CEB4';
+        ctx.fillText(`Players: ${currentLevel.playerCount}`, 20, 95);
+    }
     
     // Draw UI overlay for waiting state
     if (gameState.gameStatus === 'waiting') {
@@ -702,6 +1169,177 @@ function updateUI() {
     ).join('');
     
     playersListEl.innerHTML = '<div style="font-weight: bold; margin-bottom: 5px;">Players:</div>' + playersHtml;
+}
+
+// Chat system
+const chatToggle = document.getElementById('chatToggle');
+const chatContainer = document.getElementById('chatContainer');
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const chatSend = document.getElementById('chatSend');
+const closeChat = document.getElementById('closeChat');
+const emojiPanel = document.getElementById('emojiPanel');
+
+let chatVisible = false;
+
+// Chat event listeners
+chatToggle.addEventListener('click', () => {
+    chatVisible = !chatVisible;
+    chatContainer.style.display = chatVisible ? 'flex' : 'none';
+    emojiPanel.style.display = 'none';
+    if (chatVisible) {
+        chatInput.focus();
+    }
+});
+
+closeChat.addEventListener('click', () => {
+    chatVisible = false;
+    chatContainer.style.display = 'none';
+    emojiPanel.style.display = 'none';
+});
+
+chatSend.addEventListener('click', sendMessage);
+chatInput.addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        sendMessage();
+    }
+});
+
+// Emoji panel toggle
+chatToggle.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    emojiPanel.style.display = emojiPanel.style.display === 'none' ? 'block' : 'none';
+});
+
+// Emoji button handlers
+document.querySelectorAll('.emoji-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const emoji = btn.dataset.emoji;
+        sendEmoji(emoji);
+        emojiPanel.style.display = 'none';
+    });
+});
+
+function sendMessage() {
+    const message = chatInput.value.trim();
+    if (message && gameState.roomId) {
+        socket.emit('chatMessage', {
+            message: message,
+            playerName: gameState.playerName || 'Player',
+            roomId: gameState.roomId
+        });
+        chatInput.value = '';
+    }
+}
+
+function sendEmoji(emoji) {
+    if (gameState.roomId) {
+        socket.emit('emojiReaction', {
+            emoji: emoji,
+            playerName: gameState.playerName || 'Player',
+            roomId: gameState.roomId
+        });
+    }
+}
+
+function addChatMessage(message, playerName, isOwn = false) {
+    const messageEl = document.createElement('div');
+    messageEl.className = `chat-message ${isOwn ? 'own' : ''}`;
+    messageEl.innerHTML = `<strong>${playerName}:</strong> ${message}`;
+    chatMessages.appendChild(messageEl);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function addEmojiReaction(emoji, playerName) {
+    const messageEl = document.createElement('div');
+    messageEl.className = 'chat-message';
+    messageEl.innerHTML = `<strong>${playerName}</strong> reacted: ${emoji}`;
+    chatMessages.appendChild(messageEl);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Socket event handlers for chat
+socket.on('chatMessage', (data) => {
+    const isOwn = data.playerId === gameState.playerId;
+    addChatMessage(data.message, data.playerName, isOwn);
+});
+
+socket.on('emojiReaction', (data) => {
+    addEmojiReaction(data.emoji, data.playerName);
+});
+
+socket.on('levelCompleted', (data) => {
+    console.log(`Level ${data.level} completed!`);
+    showPuzzleMessage(`🎉 Level ${data.level} Completed! 🎉`, 'success');
+    
+    // Update game state
+    gameState.level = data.nextLevel;
+    gameState.gameStatus = 'completed';
+    
+    // Show level completion overlay
+    showLevelCompletionOverlay(data);
+});
+
+socket.on('nextLevel', (data) => {
+    console.log(`Starting level ${data.level}`);
+    gameState.level = data.level;
+    gameState.gameStatus = 'playing';
+    
+    // Generate new level
+    updateLevel(data.level, data.playerCount);
+    
+    // Reset player positions
+    gameState.players.forEach((player, index) => {
+        player.x = 100 + (index * 40);
+        player.y = 600;
+        player.velocityX = 0;
+        player.velocityY = 0;
+        player.onGround = false;
+    });
+    
+    // Hide completion overlay
+    hideLevelCompletionOverlay();
+});
+
+function showLevelCompletionOverlay(data) {
+    // Create completion overlay
+    let overlay = document.getElementById('levelCompletionOverlay');
+    if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.id = 'levelCompletionOverlay';
+        overlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+            color: white;
+            text-align: center;
+        `;
+        document.body.appendChild(overlay);
+    }
+    
+    overlay.innerHTML = `
+        <div style="background: rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 20px; backdrop-filter: blur(10px);">
+            <h1 style="font-size: 48px; margin: 0 0 20px 0; color: #00b894;">🎉 LEVEL COMPLETED! 🎉</h1>
+            <p style="font-size: 24px; margin: 0 0 10px 0;">Level ${data.level}</p>
+            <p style="font-size: 18px; margin: 0 0 20px 0; color: #ddd;">Players: ${data.playerCount}</p>
+            <p style="font-size: 16px; margin: 0; color: #bbb;">Starting next level in 3 seconds...</p>
+        </div>
+    `;
+    overlay.style.display = 'flex';
+}
+
+function hideLevelCompletionOverlay() {
+    const overlay = document.getElementById('levelCompletionOverlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
 }
 
 // Start the game loop
