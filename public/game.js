@@ -358,26 +358,76 @@ playerNameInput.addEventListener('keypress', (e) => {
 });
 
 function joinRoom(roomId, playerName) {
+    // Normalize room ID
+    roomId = roomId.toUpperCase().trim();
+    
+    // Validate room ID
+    if (roomId.length !== 6) {
+        alert('Room code must be exactly 6 characters');
+        return;
+    }
+    
     gameState.roomId = roomId;
     gameState.playerName = playerName;
     
-    // Hide room setup, show game
-    roomSetupEl.style.display = 'none';
-    gameInfoEl.style.display = 'flex';
-    gameControlsEl.style.display = 'block';
-    
-    // Update URL
-    updateURL(roomId, playerName);
-    
-    // Update share link
-    const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
-    shareLinkEl.textContent = shareUrl;
-    
-    // Show room code prominently
-    showRoomCodeCreated(roomId);
+    // Show loading state
+    showLoadingState('Joining room...');
     
     // Join the room
     socket.emit('joinRoom', { roomId, playerName });
+}
+
+function showLoadingState(message) {
+    // Create or update loading overlay
+    let loadingEl = document.getElementById('loadingOverlay');
+    if (!loadingEl) {
+        loadingEl = document.createElement('div');
+        loadingEl.id = 'loadingOverlay';
+        loadingEl.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 3000;
+            color: white;
+            text-align: center;
+        `;
+        document.body.appendChild(loadingEl);
+    }
+    
+    loadingEl.innerHTML = `
+        <div style="background: rgba(255, 255, 255, 0.1); padding: 40px; border-radius: 20px; backdrop-filter: blur(10px);">
+            <div style="font-size: 24px; margin-bottom: 20px;">${message}</div>
+            <div style="width: 40px; height: 40px; border: 4px solid rgba(255,255,255,0.3); border-top: 4px solid white; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
+        </div>
+    `;
+    
+    // Add CSS animation
+    if (!document.getElementById('loadingCSS')) {
+        const style = document.createElement('style');
+        style.id = 'loadingCSS';
+        style.textContent = `
+            @keyframes spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+    
+    loadingEl.style.display = 'flex';
+}
+
+function hideLoadingState() {
+    const loadingEl = document.getElementById('loadingOverlay');
+    if (loadingEl) {
+        loadingEl.style.display = 'none';
+    }
 }
 
 function showRoomCodeCreated(roomCode) {
@@ -438,6 +488,25 @@ socket.on('gameState', (data) => {
     gameState.level = data.level;
     gameState.playerId = data.playerId;
     gameState.roomId = data.roomId;
+    gameState.playerName = data.playerName;
+    
+    // Hide loading state
+    hideLoadingState();
+    
+    // Hide room setup, show game
+    roomSetupEl.style.display = 'none';
+    gameInfoEl.style.display = 'flex';
+    gameControlsEl.style.display = 'block';
+    
+    // Update URL
+    updateURL(data.roomId, data.playerName);
+    
+    // Update share link
+    const shareUrl = `${window.location.origin}${window.location.pathname}?room=${data.roomId}`;
+    shareLinkEl.textContent = shareUrl;
+    
+    // Show room code prominently
+    showRoomCodeCreated(data.roomId);
     
     // Generate level based on current player count
     updateLevel(gameState.level, data.players.length);
@@ -446,6 +515,25 @@ socket.on('gameState', (data) => {
     localPlayer = gameState.players.find(p => p.id === gameState.playerId);
     
     updateUI();
+    
+    console.log('Successfully joined room:', data.roomId, 'with', data.players.length, 'players');
+});
+
+socket.on('roomJoined', (data) => {
+    console.log('Room joined successfully:', data);
+    showPuzzleMessage(`Successfully joined room ${data.roomId}!`, 'success');
+});
+
+socket.on('roomError', (data) => {
+    hideLoadingState();
+    alert(`Room Error: ${data.message}`);
+    console.error('Room error:', data);
+});
+
+socket.on('roomFull', (data) => {
+    hideLoadingState();
+    alert(`Room is full! ${data.message}`);
+    console.log('Room full:', data);
 });
 
 socket.on('playerJoined', (data) => {
@@ -456,6 +544,11 @@ socket.on('playerJoined', (data) => {
     updateLevel(gameState.level, data.players.length);
     
     updateUI();
+    
+    // Show notification for new player
+    if (data.newPlayer && data.newPlayer.id !== gameState.playerId) {
+        showPuzzleMessage(`${data.newPlayer.name} joined the room!`, 'success');
+    }
 });
 
 socket.on('playerLeft', (data) => {
@@ -465,6 +558,11 @@ socket.on('playerLeft', (data) => {
     updateLevel(gameState.level, data.players.length);
     
     updateUI();
+    
+    // Show notification for player leaving
+    if (data.playerCount !== undefined) {
+        console.log(`Player left. Remaining players: ${data.playerCount}`);
+    }
 });
 
 socket.on('playerUpdate', (data) => {

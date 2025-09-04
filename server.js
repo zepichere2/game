@@ -23,11 +23,22 @@ class GameRoom {
         this.level = 1;
         this.switches = new Map();
         this.doors = new Map();
+        this.createdAt = Date.now();
+        this.lastActivity = Date.now();
     }
 
     addPlayer(socket, playerName) {
         if (this.players.size >= maxPlayersPerRoom) {
             return false;
+        }
+
+        // Check if player already exists (reconnection)
+        if (this.players.has(socket.id)) {
+            const existingPlayer = this.players.get(socket.id);
+            existingPlayer.name = playerName || existingPlayer.name;
+            existingPlayer.isConnected = true;
+            this.lastActivity = Date.now();
+            return true;
         }
 
         const playerColors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FECA57', '#FF9FF3', '#54A0FF', '#5F27CD', '#00D2D3', '#FF9F43', '#E74C3C', '#3498DB', '#2ECC71', '#F39C12', '#9B59B6', '#1ABC9C'];
@@ -46,17 +57,24 @@ class GameRoom {
             velocityY: 0,
             color: playerColors[playerNumber - 1],
             onGround: false,
-            isAlive: true
+            isAlive: true,
+            isConnected: true,
+            joinedAt: Date.now()
         };
 
         this.players.set(playerId, player);
+        this.lastActivity = Date.now();
         return true;
     }
 
     removePlayer(playerId) {
-        this.players.delete(playerId);
-        if (this.players.size === 0) {
-            return true; // Room should be deleted
+        if (this.players.has(playerId)) {
+            this.players.delete(playerId);
+            this.lastActivity = Date.now();
+            
+            if (this.players.size === 0) {
+                return true; // Room should be deleted
+            }
         }
         return false;
     }
@@ -65,6 +83,7 @@ class GameRoom {
         if (this.players.has(playerId)) {
             const player = this.players.get(playerId);
             Object.assign(player, playerData);
+            this.lastActivity = Date.now();
         }
     }
 
@@ -74,6 +93,18 @@ class GameRoom {
 
     getPlayersArray() {
         return Array.from(this.players.values());
+    }
+
+    getRoomInfo() {
+        return {
+            id: this.id,
+            playerCount: this.players.size,
+            maxPlayers: maxPlayersPerRoom,
+            gameState: this.gameState,
+            level: this.level,
+            createdAt: this.createdAt,
+            lastActivity: this.lastActivity
+        };
     }
 }
 
@@ -161,8 +192,30 @@ io.on('connection', (socket) => {
             playerName = data.playerName || 'Player';
         }
 
+        // Normalize room ID (uppercase for consistency)
+        roomId = roomId.toUpperCase().trim();
+        
+        // Validate room ID format (6 characters)
+        if (roomId.length !== 6) {
+            socket.emit('roomError', { message: 'Invalid room code format' });
+            return;
+        }
+
+        // Check if player is already in a room
+        if (socket.roomId) {
+            socket.leave(socket.roomId);
+            const oldRoom = gameRooms.get(socket.roomId);
+            if (oldRoom) {
+                oldRoom.removePlayer(socket.id);
+                if (oldRoom.players.size === 0) {
+                    gameRooms.delete(socket.roomId);
+                }
+            }
+        }
+
         if (!gameRooms.has(roomId)) {
             gameRooms.set(roomId, new GameRoom(roomId));
+            console.log(`Created new room: ${roomId}`);
         }
 
         const room = gameRooms.get(roomId);
@@ -177,18 +230,34 @@ io.on('connection', (socket) => {
                 gameState: room.gameState,
                 level: room.level,
                 playerId: socket.id,
-                roomId: roomId
+                roomId: roomId,
+                playerName: playerName
             });
 
-            // Notify all players in the room
+            // Notify all players in the room about the new player
             io.to(roomId).emit('playerJoined', {
                 players: room.getPlayersArray(),
-                gameState: room.gameState
+                gameState: room.gameState,
+                newPlayer: {
+                    id: socket.id,
+                    name: playerName
+                }
             });
 
             console.log(`Player ${socket.id} (${playerName}) joined room ${roomId}. Players: ${room.players.size}`);
+            
+            // Send room info to the new player
+            socket.emit('roomJoined', {
+                roomId: roomId,
+                playerCount: room.players.size,
+                maxPlayers: maxPlayersPerRoom
+            });
         } else {
-            socket.emit('roomFull');
+            socket.emit('roomFull', { 
+                message: 'Room is full! Maximum 16 players allowed.',
+                currentPlayers: room.players.size,
+                maxPlayers: maxPlayersPerRoom
+            });
         }
     });
 
@@ -359,15 +428,42 @@ io.on('connection', (socket) => {
             
             if (shouldDeleteRoom) {
                 gameRooms.delete(roomId);
-                console.log(`Room ${roomId} deleted`);
+                console.log(`Room ${roomId} deleted (no players left)`);
             } else {
                 // Notify remaining players
                 io.to(roomId).emit('playerLeft', {
                     playerId: socket.id,
-                    players: room.getPlayersArray()
+                    players: room.getPlayersArray(),
+                    playerCount: room.players.size
                 });
                 console.log(`Player ${socket.id} left room ${roomId}. Players: ${room.players.size}`);
             }
+        }
+    });
+
+    // Add room validation endpoint
+    socket.on('validateRoom', (data) => {
+        const roomId = data.roomId ? data.roomId.toUpperCase().trim() : null;
+        
+        if (!roomId || roomId.length !== 6) {
+            socket.emit('roomValidation', { 
+                valid: false, 
+                message: 'Invalid room code format' 
+            });
+            return;
+        }
+
+        const room = gameRooms.get(roomId);
+        if (room) {
+            socket.emit('roomValidation', { 
+                valid: true, 
+                roomInfo: room.getRoomInfo() 
+            });
+        } else {
+            socket.emit('roomValidation', { 
+                valid: false, 
+                message: 'Room does not exist' 
+            });
         }
     });
 });
