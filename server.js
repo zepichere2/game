@@ -181,6 +181,8 @@ io.on('connection', (socket) => {
     console.log('Player connected:', socket.id);
 
     socket.on('joinRoom', (data) => {
+        console.log('Received joinRoom event:', data);
+        
         let roomId, playerName;
         
         if (typeof data === 'string') {
@@ -191,6 +193,8 @@ io.on('connection', (socket) => {
             roomId = data.roomId || 'room1';
             playerName = data.playerName || 'Player';
         }
+        
+        console.log('Processing joinRoom for:', roomId, 'player:', playerName);
 
         // Normalize room ID (uppercase for consistency)
         roomId = roomId.toUpperCase().trim();

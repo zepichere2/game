@@ -1,5 +1,20 @@
 // Game client-side code
 const socket = io();
+
+// Add connection debugging
+socket.on('connect', () => {
+    console.log('Connected to server with ID:', socket.id);
+});
+
+socket.on('disconnect', () => {
+    console.log('Disconnected from server');
+});
+
+socket.on('connect_error', (error) => {
+    console.error('Connection error:', error);
+    alert('Failed to connect to server. Please check your connection.');
+});
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
@@ -426,6 +441,18 @@ function joinRoom(roomId, playerName) {
     // Show loading state
     showLoadingState('Joining room...');
     
+    // Set timeout for room joining
+    const timeout = setTimeout(() => {
+        hideLoadingState();
+        alert('Failed to join room. Please check your connection and try again.');
+        console.error('Room joining timeout');
+    }, 10000); // 10 second timeout
+    
+    // Store timeout ID for cleanup
+    gameState.roomJoiningTimeout = timeout;
+    
+    console.log('Attempting to join room:', roomId, 'with name:', playerName);
+    
     // Join the room
     socket.emit('joinRoom', { roomId, playerName });
 }
@@ -548,6 +575,10 @@ socket.on('gameState', (data) => {
         clearTimeout(gameState.roomCreationTimeout);
         gameState.roomCreationTimeout = null;
     }
+    if (gameState.roomJoiningTimeout) {
+        clearTimeout(gameState.roomJoiningTimeout);
+        gameState.roomJoiningTimeout = null;
+    }
     
     // Hide loading state
     hideLoadingState();
@@ -589,6 +620,10 @@ socket.on('roomError', (data) => {
         clearTimeout(gameState.roomCreationTimeout);
         gameState.roomCreationTimeout = null;
     }
+    if (gameState.roomJoiningTimeout) {
+        clearTimeout(gameState.roomJoiningTimeout);
+        gameState.roomJoiningTimeout = null;
+    }
     
     hideLoadingState();
     alert(`Room Error: ${data.message}`);
@@ -600,6 +635,10 @@ socket.on('roomFull', (data) => {
     if (gameState.roomCreationTimeout) {
         clearTimeout(gameState.roomCreationTimeout);
         gameState.roomCreationTimeout = null;
+    }
+    if (gameState.roomJoiningTimeout) {
+        clearTimeout(gameState.roomJoiningTimeout);
+        gameState.roomJoiningTimeout = null;
     }
     
     hideLoadingState();
