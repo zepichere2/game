@@ -316,7 +316,9 @@ function updateURL(roomId, playerName) {
 createRoomBtn.addEventListener('click', () => {
     const playerName = playerNameInput.value.trim() || 'Player';
     const roomCode = generateRoomCode();
-    createRoom(roomCode, playerName);
+    
+    // Use joinRoom for creating rooms (server will create if it doesn't exist)
+    joinRoom(roomCode, playerName);
 });
 
 joinRoomBtn.addEventListener('click', () => {
@@ -328,7 +330,8 @@ joinRoomBtn.addEventListener('click', () => {
         return;
     }
     
-    joinExistingRoom(roomCode, playerName);
+    // Use joinRoom directly (server will handle room creation/joining)
+    joinRoom(roomCode, playerName);
 });
 
 copyLinkBtn.addEventListener('click', () => {
@@ -372,6 +375,16 @@ function createRoom(roomId, playerName) {
     
     // Show loading state
     showLoadingState('Creating room...');
+    
+    // Set timeout for room creation
+    const timeout = setTimeout(() => {
+        hideLoadingState();
+        alert('Room creation timed out. Please try again.');
+        console.error('Room creation timeout');
+    }, 10000); // 10 second timeout
+    
+    // Store timeout ID for cleanup
+    gameState.roomCreationTimeout = timeout;
     
     // Create the room (server will create if it doesn't exist)
     socket.emit('createRoom', { roomId, playerName });
@@ -530,6 +543,12 @@ socket.on('gameState', (data) => {
     gameState.roomId = data.roomId;
     gameState.playerName = data.playerName;
     
+    // Clear any pending timeouts
+    if (gameState.roomCreationTimeout) {
+        clearTimeout(gameState.roomCreationTimeout);
+        gameState.roomCreationTimeout = null;
+    }
+    
     // Hide loading state
     hideLoadingState();
     
@@ -565,12 +584,24 @@ socket.on('roomJoined', (data) => {
 });
 
 socket.on('roomError', (data) => {
+    // Clear any pending timeouts
+    if (gameState.roomCreationTimeout) {
+        clearTimeout(gameState.roomCreationTimeout);
+        gameState.roomCreationTimeout = null;
+    }
+    
     hideLoadingState();
     alert(`Room Error: ${data.message}`);
     console.error('Room error:', data);
 });
 
 socket.on('roomFull', (data) => {
+    // Clear any pending timeouts
+    if (gameState.roomCreationTimeout) {
+        clearTimeout(gameState.roomCreationTimeout);
+        gameState.roomCreationTimeout = null;
+    }
+    
     hideLoadingState();
     alert(`Room is full! ${data.message}`);
     console.log('Room full:', data);
