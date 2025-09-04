@@ -316,7 +316,7 @@ function updateURL(roomId, playerName) {
 createRoomBtn.addEventListener('click', () => {
     const playerName = playerNameInput.value.trim() || 'Player';
     const roomCode = generateRoomCode();
-    joinRoom(roomCode, playerName);
+    createRoom(roomCode, playerName);
 });
 
 joinRoomBtn.addEventListener('click', () => {
@@ -328,7 +328,7 @@ joinRoomBtn.addEventListener('click', () => {
         return;
     }
     
-    joinRoom(roomCode, playerName);
+    joinExistingRoom(roomCode, playerName);
 });
 
 copyLinkBtn.addEventListener('click', () => {
@@ -356,6 +356,46 @@ playerNameInput.addEventListener('keypress', (e) => {
         }
     }
 });
+
+function createRoom(roomId, playerName) {
+    // Normalize room ID
+    roomId = roomId.toUpperCase().trim();
+    
+    // Validate room ID
+    if (roomId.length !== 6) {
+        alert('Room code must be exactly 6 characters');
+        return;
+    }
+    
+    gameState.roomId = roomId;
+    gameState.playerName = playerName;
+    
+    // Show loading state
+    showLoadingState('Creating room...');
+    
+    // Create the room (server will create if it doesn't exist)
+    socket.emit('createRoom', { roomId, playerName });
+}
+
+function joinExistingRoom(roomId, playerName) {
+    // Normalize room ID
+    roomId = roomId.toUpperCase().trim();
+    
+    // Validate room ID
+    if (roomId.length !== 6) {
+        alert('Room code must be exactly 6 characters');
+        return;
+    }
+    
+    gameState.roomId = roomId;
+    gameState.playerName = playerName;
+    
+    // Show loading state
+    showLoadingState('Joining room...');
+    
+    // First validate if room exists
+    socket.emit('validateRoom', { roomId });
+}
 
 function joinRoom(roomId, playerName) {
     // Normalize room ID
@@ -534,6 +574,21 @@ socket.on('roomFull', (data) => {
     hideLoadingState();
     alert(`Room is full! ${data.message}`);
     console.log('Room full:', data);
+});
+
+socket.on('roomValidation', (data) => {
+    if (data.valid) {
+        // Room exists, proceed to join
+        socket.emit('joinRoom', { 
+            roomId: gameState.roomId, 
+            playerName: gameState.playerName 
+        });
+    } else {
+        // Room doesn't exist
+        hideLoadingState();
+        alert(`Room Error: ${data.message}`);
+        console.error('Room validation failed:', data);
+    }
 });
 
 socket.on('playerJoined', (data) => {

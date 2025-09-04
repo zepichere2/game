@@ -441,6 +441,73 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Add room creation endpoint
+    socket.on('createRoom', (data) => {
+        let roomId = data.roomId ? data.roomId.toUpperCase().trim() : null;
+        const playerName = data.playerName || 'Player';
+        
+        if (!roomId || roomId.length !== 6) {
+            socket.emit('roomError', { message: 'Invalid room code format' });
+            return;
+        }
+
+        // Check if room already exists
+        if (gameRooms.has(roomId)) {
+            // Room exists, join it instead
+            const room = gameRooms.get(roomId);
+            if (room.addPlayer(socket, playerName)) {
+                socket.join(roomId);
+                socket.roomId = roomId;
+                
+                socket.emit('gameState', {
+                    players: room.getPlayersArray(),
+                    gameState: room.gameState,
+                    level: room.level,
+                    playerId: socket.id,
+                    roomId: roomId,
+                    playerName: playerName
+                });
+
+                io.to(roomId).emit('playerJoined', {
+                    players: room.getPlayersArray(),
+                    gameState: room.gameState,
+                    newPlayer: {
+                        id: socket.id,
+                        name: playerName
+                    }
+                });
+
+                console.log(`Player ${socket.id} (${playerName}) joined existing room ${roomId}. Players: ${room.players.size}`);
+            } else {
+                socket.emit('roomFull', { 
+                    message: 'Room is full! Maximum 16 players allowed.',
+                    currentPlayers: room.players.size,
+                    maxPlayers: maxPlayersPerRoom
+                });
+            }
+        } else {
+            // Create new room
+            const room = new GameRoom(roomId);
+            gameRooms.set(roomId, room);
+            
+            if (room.addPlayer(socket, playerName)) {
+                socket.join(roomId);
+                socket.roomId = roomId;
+                
+                socket.emit('gameState', {
+                    players: room.getPlayersArray(),
+                    gameState: room.gameState,
+                    level: room.level,
+                    playerId: socket.id,
+                    roomId: roomId,
+                    playerName: playerName
+                });
+
+                console.log(`Player ${socket.id} (${playerName}) created new room ${roomId}. Players: ${room.players.size}`);
+            }
+        }
+    });
+
     // Add room validation endpoint
     socket.on('validateRoom', (data) => {
         const roomId = data.roomId ? data.roomId.toUpperCase().trim() : null;
